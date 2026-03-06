@@ -25,7 +25,7 @@ public sealed class ClaudeOAuthUsageFetcher : IDisposable
             Timeout = TimeSpan.FromSeconds(10)
         };
         _httpClient.DefaultRequestHeaders.Add("anthropic-beta", BetaHeader);
-        _httpClient.DefaultRequestHeaders.Add("User-Agent", "costats");
+        _httpClient.DefaultRequestHeaders.Add("User-Agent", "claude-code/2.1.70");
     }
 
     public ClaudeOAuthUsageFetcher(string configDir) : this()

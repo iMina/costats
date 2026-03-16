@@ -298,6 +298,10 @@ namespace costats.App
                     services.AddSingleton<IClaudeBoostMonitor>(sp => sp.GetRequiredService<ClaudeBoostMonitor>());
                     services.AddHostedService(sp => sp.GetRequiredService<ClaudeBoostMonitor>());
 
+                    services.AddSingleton<CodexBoostMonitor>();
+                    services.AddSingleton<ICodexBoostMonitor>(sp => sp.GetRequiredService<CodexBoostMonitor>());
+                    services.AddHostedService(sp => sp.GetRequiredService<CodexBoostMonitor>());
+
                     services.AddSingleton<PulseViewModel>();
                     services.AddSingleton<SettingsViewModel>();
                     services.AddSingleton<GlassWidgetWindow>();

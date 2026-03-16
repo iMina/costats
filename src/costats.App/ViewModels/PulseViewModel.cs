@@ -17,8 +17,10 @@ public sealed partial class PulseViewModel : ObservableObject, IObserver<PulseSt
     private readonly Dictionary<string, string> _displayNames;
     private readonly IClaudeBoostMonitor _boostMonitor;
     private readonly EventHandler _boostHandler;
+    private readonly ICodexBoostMonitor _codexBoostMonitor;
+    private readonly EventHandler _codexBoostHandler;
 
-    public PulseViewModel(IPulseOrchestrator orchestrator, AppSettings settings, IEnumerable<ISignalSource> sources, IClaudeBoostMonitor boostMonitor)
+    public PulseViewModel(IPulseOrchestrator orchestrator, AppSettings settings, IEnumerable<ISignalSource> sources, IClaudeBoostMonitor boostMonitor, ICodexBoostMonitor codexBoostMonitor)
     {
         _orchestrator = orchestrator;
         _settings = settings;
@@ -35,6 +37,11 @@ public sealed partial class PulseViewModel : ObservableObject, IObserver<PulseSt
         _boostHandler = (_, _) => System.Windows.Application.Current.Dispatcher.BeginInvoke(UpdateBoostProperties);
         boostMonitor.StatusChanged += _boostHandler;
         UpdateBoostProperties();
+
+        _codexBoostMonitor = codexBoostMonitor;
+        _codexBoostHandler = (_, _) => System.Windows.Application.Current.Dispatcher.BeginInvoke(UpdateCodexBoostProperties);
+        codexBoostMonitor.StatusChanged += _codexBoostHandler;
+        UpdateCodexBoostProperties();
     }
 
     public ObservableCollection<ProviderPulseViewModel> Providers { get; }
@@ -103,6 +110,20 @@ public sealed partial class PulseViewModel : ObservableObject, IObserver<PulseSt
             : s.Is2x
                 ? (s.ExpiresIn.Length > 0 ? $"2× limits active · ends in {s.ExpiresIn}" : "2× limits active")
                 : (s.ExpiresIn.Length > 0 ? $"Peak hours · resumes in {s.ExpiresIn}" : "Peak hours · standard limits");
+    }
+
+    [ObservableProperty]
+    private bool isCodexPromoActive;
+
+    [ObservableProperty]
+    private string codexBoostLabel = string.Empty;
+
+    private void UpdateCodexBoostProperties()
+    {
+        var s = _codexBoostMonitor.Current;
+        IsCodexPromoActive = s?.PromoActive ?? false;
+        CodexBoostLabel = s is null ? string.Empty
+            : s.Deadline.Length > 0 ? $"2× limits active · through {s.Deadline}" : "2× limits active";
     }
 
     public ObservableCollection<ProviderPulseViewModel> ClaudeProfiles { get; } = new();
@@ -336,6 +357,7 @@ public sealed partial class PulseViewModel : ObservableObject, IObserver<PulseSt
     public void Dispose()
     {
         _boostMonitor.StatusChanged -= _boostHandler;
+        _codexBoostMonitor.StatusChanged -= _codexBoostHandler;
         _subscription.Dispose();
     }
 }

@@ -23,6 +23,9 @@ namespace costats.App.Services
         private readonly PulseViewModel _viewModel;
         private readonly TaskbarPositionService _taskbarPosition;
 
+        private readonly Icon _defaultIcon;
+        private Icon? _boostIcon;
+
         public TrayHost(
             PulseViewModel viewModel,
             GlassWidgetWindow widgetWindow,
@@ -36,13 +39,15 @@ namespace costats.App.Services
             _pulseOrchestrator = pulseOrchestrator;
             _taskbarPosition = taskbarPosition;
 
+            _defaultIcon = CreateIcon();
             _taskbarIcon = new TaskbarIcon();
-            _taskbarIcon.Icon = CreateIcon();
+            _taskbarIcon.Icon = _defaultIcon;
             _taskbarIcon.ToolTipText = "costats";
             _taskbarIcon.ContextMenu = BuildContextMenu();
             _taskbarIcon.TrayLeftMouseUp += OnTrayLeftClick;
             _taskbarIcon.ForceCreate(enablesEfficiencyMode: false);
 
+            _viewModel.PropertyChanged += OnViewModelPropertyChanged;
             SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
             _widgetWindow.SizeChanged += OnWidgetSizeChanged;
         }
@@ -50,6 +55,73 @@ namespace costats.App.Services
         private void OnTrayLeftClick(object? sender, EventArgs e)
         {
             ToggleWidget();
+        }
+
+        private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName is nameof(PulseViewModel.IsBoostActive) or nameof(PulseViewModel.IsPromoActive))
+            {
+                UpdateTrayIcon();
+            }
+        }
+
+        private void UpdateTrayIcon()
+        {
+            if (_viewModel.IsPromoActive && _viewModel.IsBoostActive)
+            {
+                _boostIcon ??= TintIcon(_defaultIcon, Color.FromArgb(16, 185, 129)); // #10B981 emerald (matches Codex accent)
+                _taskbarIcon.Icon = _boostIcon;
+            }
+            else
+            {
+                _taskbarIcon.Icon = _defaultIcon;
+            }
+        }
+
+        /// <summary>
+        /// Produces a re-tinted copy of the source icon by desaturating it and
+        /// applying a solid-color tint, preserving the original shape and alpha.
+        /// </summary>
+        private static Icon TintIcon(Icon source, Color tint)
+        {
+            try
+            {
+                using var original = source.ToBitmap();
+                var result = new Bitmap(original.Width, original.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+                using var g = Graphics.FromImage(result);
+
+                float r = tint.R / 255f;
+                float gn = tint.G / 255f;
+                float b = tint.B / 255f;
+
+                // Desaturate + recolor in one matrix pass:
+                // each output channel = luminance-weighted sum of input * tint channel
+                var matrix = new System.Drawing.Imaging.ColorMatrix(new[]
+                {
+                    new[] { 0.299f * r, 0.299f * gn, 0.299f * b, 0f, 0f },
+                    new[] { 0.587f * r, 0.587f * gn, 0.587f * b, 0f, 0f },
+                    new[] { 0.114f * r, 0.114f * gn, 0.114f * b, 0f, 0f },
+                    new[] { 0f,         0f,           0f,          1f, 0f },
+                    new[] { 0f,         0f,           0f,          0f, 1f },
+                });
+
+                using var attrs = new System.Drawing.Imaging.ImageAttributes();
+                attrs.SetColorMatrix(matrix);
+                g.DrawImage(original,
+                    new Rectangle(0, 0, original.Width, original.Height),
+                    0, 0, original.Width, original.Height,
+                    GraphicsUnit.Pixel, attrs);
+
+                var hIcon = result.GetHicon();
+                using var temp = Icon.FromHandle(hIcon);
+                var icon = (Icon)temp.Clone();
+                DestroyIcon(hIcon);
+                return icon;
+            }
+            catch
+            {
+                return (Icon)source.Clone();
+            }
         }
 
         private static Icon CreateIcon()
@@ -178,9 +250,12 @@ namespace costats.App.Services
 
         public void Dispose()
         {
+            _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
             _widgetWindow.SizeChanged -= OnWidgetSizeChanged;
             SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
             _taskbarIcon.Dispose();
+            _defaultIcon.Dispose();
+            _boostIcon?.Dispose();
             _widgetWindow.Close();
             _settingsWindow.Close();
         }
